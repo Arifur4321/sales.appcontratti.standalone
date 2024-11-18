@@ -1,0 +1,18 @@
+ <IfModule mod_rewrite.c>
+    Options +FollowSymLinks
+    RewriteEngine On
+
+    # Redirect all requests to the public directory
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ /public/$1
+    # Use this if necessary: RewriteRule ^ index.php [L]
+    RewriteRule ^(/)?$ public/index.php [L]
+</IfModule>
+
+# PHP settings for increased limits
+php_value memory_limit 256M
+php_value max_execution_time 600
+php_value post_max_size 50M
+php_value upload_max_filesize 50M
