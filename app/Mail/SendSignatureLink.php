@@ -9,6 +9,8 @@ use App\Models\SalesListDraft;
 use App\Models\Template;
 use App\Models\Company;
 
+
+
 class SendSignatureLink extends Mailable
 {
     use Queueable, SerializesModels;
@@ -98,7 +100,7 @@ class SendSignatureLink extends Mailable
     
 }
 
-
+// so how to make this as periodic sending email like in every 3 hour but keep all previos logic
 
 // namespace App\Mail;
 

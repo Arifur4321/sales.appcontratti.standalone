@@ -1064,12 +1064,14 @@ $.each(variableData.variableData, function(index, variable) {
 
         $('#frequency').on('change', function() {
             var selectedProduct = $(this).val();
+            var id = window.location.pathname.split('/').pop();
             if (selectedProduct) {
                 $.ajax({
                     url: '/get-contracts',
                     type: 'GET',
                     data: {
-                        product_name: selectedProduct
+                        product_name: selectedProduct,
+                         
                     },
                     success: function(response) {
                         $('#Contract').empty();
@@ -1098,12 +1100,13 @@ $.each(variableData.variableData, function(index, variable) {
                 });
             }
         });
-
+        var id = window.location.pathname.split('/').pop();
         $.ajax({
             url: '/get-products',
             type: 'GET',
             data: {
-                seller_name: "{{ Auth::user()->name }}"
+                seller_name: "{{ Auth::user()->name }}",
+                id: id ,
             },
             success: function(response) {
                 if(response.status === 'success') {

@@ -23,8 +23,7 @@ use HelloSign\SignatureRequest;
 use HelloSign\Signer;
 use App\Models\SalesListDraft; // Import your model
 
-use HelloSign\Client as HelloSignClient;
- 
+use HelloSign\Client as HelloSignClient; 
 use HelloSign\SignatureRequestSigner;
 use Twilio\Rest\Client as TwilioClient;
  
@@ -118,10 +117,6 @@ class ProductController extends Controller
             'Content-Type' => 'application/pdf',
         ]);
     }
-
-
-
-
 
 
     public function getAllEditVariables(Request $request)
@@ -664,7 +659,8 @@ class ProductController extends Controller
         }
     }
     
- 
+
+// for sending email    
 public function sendDocumentForSignature(Request $request)
 {
     $pdfUrl = $request->input('pdfUrl');
@@ -692,11 +688,6 @@ public function sendDocumentForSignature(Request $request)
     
      // Process image tags to ensure positions are set
      $htmlContent = $this->processImageTags($htmlContent);
-
-     // Replace the specific image tags with the signature tag
-  //   $htmlContent = $this->replaceImageTagsWithSignatureTag($htmlContent);
-
-    // Fetch the contract by ID or name
     $contractIdentifier = $request->input('selectedContractId');
     $contract = null;
     $contractID = null;
@@ -782,10 +773,7 @@ public function sendDocumentForSignature(Request $request)
         $mpdf->SetTitle('Document for Signature');
         $mpdf->SetAuthor('Your Company');
 
-          // $mpdf->SetWatermarkText('Giacomo Freddi');
-            // $mpdf->showWatermarkText = true;
-            // $mpdf->watermark_font = 'DejaVuSansCondensed';
-            // $mpdf->watermarkTextAlpha = 0.1;
+       
 
 
             $id = $request->input('id');
@@ -852,8 +840,6 @@ public function sendDocumentForSignature(Request $request)
             });
         }
         
-   
-
         // Step 3: Check if the $id is provided and use it to update the existing row instead of creating a new one
         $salesListDraft = SalesListDraft::find($id);
 
@@ -892,9 +878,6 @@ public function sendDocumentForSignature(Request $request)
             $responseMessage['sales_sms_status'] = 'Failed to send Sales SMS.';
         }
 
-        // Send the email with the signing link
-        // Mail::to($recipientEmail)->send(new \App\Mail\SendSignatureLink($signingUrl, $recipientName));
-        // Send the email with the signing link and the pdfSignature object
         Mail::to($recipientEmail)->send(new \App\Mail\SendSignatureLink($signingUrl, $recipientName, $salesListDraft));
 
         // Step 4: Update the database with the new document details if needed
@@ -946,10 +929,7 @@ public function sendDocumentForSignature(Request $request)
 }
 
 
-
-
- 
-// 
+// for send SMS using Twilio 
 private function sendSMS($id, $recipientMobile, $signatureUrl)
 {
     // Retrieve Twilio credentials from the .env file
@@ -1359,110 +1339,6 @@ public function salesSendSMS($recipientEmail, $pdfFilePath)
     }
 
 
-
-//  public function addNoteAndTag($id, $recipientEmail, $contractName, $selectedProduct)
-// {
-//     try {
-//         // Step 1: Retrieve the ActiveCampaign connection and check company ID
-//         $companyId = SalesListDraft::where('id', $id)->value('company_id');
-
-//         $appConnection = AppConnection::where('type', 'ActiveCampaign')
-//                                       ->where('company_id', $companyId)
-//                                       ->first();
-
-//         if (!$appConnection) {
-//             \Log::info("No ActiveCampaign connection found for company ID {$companyId}");
-//             return; // Exit if no matching connection is found
-//         }
-
-//         // Step 2: Parse the selected tags from `api_key`
-//         $apiData = json_decode($appConnection->api_key, true);
-//         $selectedTags = [];
-//         if (isset($apiData['selectedTags'])) {
-//             $selectedTags = json_decode($apiData['selectedTags'], true);
-//         }
-
-//         // Default note text if no template is found in the database
-//         $noteTemplate = $apiData['pending'] ?? "L'email del cliente ha ricevuto il contratto: \$contract_name$, per il prodotto: \$product_name$. Il contratto è stato inviato con successo ed è in attesa di firma.";
-
-//         // Replace placeholders with actual values
-//         $noteText = str_replace(['$contract_name$', '$product_name$'], [$contractName, $selectedProduct], $noteTemplate);
-
-//         // Step 3: Search for the contact in ActiveCampaign using the recipient's email
-//         $response = $this->activeCampaignClient->request('GET', 'https://giacomofreddi.api-us1.com/api/3/contacts', [
-//             'headers' => [
-//                 'Api-Token' => $this->activeCampaignApiKey
-//             ],
-//             'query' => [
-//                 'email' => $recipientEmail,
-//             ]
-//         ]);
-
-//         $contacts = json_decode($response->getBody(), true);
-
-//         \Log::info('ActiveCampaign Contact Search Response:', $contacts);
-
-//         if (isset($contacts['contacts']) && count($contacts['contacts']) > 0) {
-//             $contactId = $contacts['contacts'][0]['id'];
-
-//             // Log the variables to ensure they are not empty
-//             \Log::info("Adding note with Contract Name: {$contractName}, Product Name: {$selectedProduct}");
-
-//             // Step 4: Add the note to the contact
-//             $noteResponse = $this->activeCampaignClient->request('POST', 'https://giacomofreddi.api-us1.com/api/3/notes', [
-//                 'headers' => [
-//                     'Api-Token' => $this->activeCampaignApiKey
-//                 ],
-//                 'json' => [
-//                     'note' => [
-//                         'contact' => $contactId,
-//                         'note' => $noteText
-//                     ]
-//                 ]
-//             ]);
-
-//             \Log::info('ActiveCampaign Note Addition Response:', json_decode($noteResponse->getBody(), true));
-
-//             // Step 5: Add each tag in `selectedTags` to the contact
-//             foreach ($selectedTags as $tag) {
-//                 $tagData = [
-//                     'contactTag' => [
-//                         'contact' => $contactId,
-//                         'tag' => $tag,
-//                     ]
-//                 ];
-
-//                 $tagResponse = $this->activeCampaignClient->request('POST', 'https://giacomofreddi.api-us1.com3/contactTags', [
-//                     'headers' => [
-//                         'Api-Token' => $this->activeCampaignApiKey
-//                     ],
-//                     'json' => $tagData
-//                 ]);
-
-//                 \Log::info("ActiveCampaign Tag Addition Response for tag {$tag}:", json_decode($tagResponse->getBody(), true));
-//             }
-
-//             \Log::info("Successfully added note and tags to ActiveCampaign for contact {$contactId}");
-//         } else {
-//             \Log::info("No contact found for email {$recipientEmail}");
-//             throw new \Exception("No contact found for email {$recipientEmail}");
-//         }
-//     } catch (\GuzzleHttp\Exception\RequestException $e) {
-//         \Log::error("RequestException while communicating with ActiveCampaign API: " . $e->getMessage());
-//         if ($e->hasResponse()) {
-//             $responseBody = $e->getResponse()->getBody()->getContents();
-//             \Log::error("Response: " . $responseBody);
-//         }
-//         throw $e;
-//     } catch (\Exception $e) {
-//         \Log::error("General exception while communicating with ActiveCampaign API: " . $e->getMessage());
-//         throw $e;
-//     }
-// }
-
-  
-
-
 //=====================================================================================================
 
   private function addCloseIoNoteForPending($id, $recipientEmail, $contractName, $selectedProduct)
@@ -1554,86 +1430,7 @@ public function salesSendSMS($recipientEmail, $pdfFilePath)
     }
 }
 
-// private function addCloseIoNoteForPending( $id ,$recipientEmail, $contractName, $selectedProduct)
-// {
-//     try {
-//         // Step 1: Retrieve the pending note template from the AppConnection table
-//         $appConnection = AppConnection::where('type', 'Close')->first();
-
-//         $noteTemplate = '';
-//         if ($appConnection && isset($appConnection->api_key)) {
-//             $apiData = json_decode($appConnection->api_key, true);
-//             if (isset($apiData['pending'])) {
-//                 $noteTemplate = $apiData['pending'];
-//             }
-//         }
-
-//         // Default note text if no template is found in the database
-//         if (empty($noteTemplate)) {
-//             $noteTemplate = "All'e-mail del cliente è arrivato il contratto: \$contract_name$, del prodotto: \$product_name$. Il contratto è stato inviato con successo ed è in attesa di firma.";
-//         }
-
-//         // Replace placeholders with actual values
-//         $noteText = str_replace(['$contract_name$', '$product_name$'], [$contractName, $selectedProduct], $noteTemplate);
-
-//         // Step 2: Search for the lead in Close.io using the recipient's email
-//         $response = $this->closeClient->request('GET', 'https://api.close.com/api/v1/lead/', [
-//             'auth' => [$this->closeioApiKey, ''], // Use Basic Auth with the API key as the username
-//             'query' => [
-//                 'query' => $recipientEmail,
-//             ]
-//         ]);
-
-//         $leads = json_decode($response->getBody(), true);
-
-//         \Log::info('Close.io Lead Search Response:', $leads);
-
-//         if (isset($leads['data']) && count($leads['data']) > 0) {
-//             $leadId = $leads['data'][0]['id'];
-
-//             // Log the variables to ensure they are not empty
-//             \Log::info("Adding note with Contract Name: {$contractName}, Product Name: {$selectedProduct}");
-
-//             // Step 3: Prepare data to add the note
-//             $data = [
-//                 'note' => $noteText,
-//                 'lead_id' => $leadId,
-//             ];
-
-//             // Step 4: Add the note to the lead
-//             $noteResponse = $this->closeClient->request('POST', 'https://api.close.com/api/v1/activity/note/', [
-//                 'auth' => [$this->closeioApiKey, ''], // Use Basic Auth with the API key as the username
-//                 'json' => $data, // Pass data directly as JSON
-//             ]);
-
-//             $noteResponseBody = json_decode($noteResponse->getBody(), true);
-//             \Log::info('Close.io Note Addition Response:', $noteResponseBody);
-
-//             // Return or log success message
-//             \Log::info("Successfully added note to Close.io for lead {$leadId}");
-//         } else {
-//             \Log::info("No lead found for email {$recipientEmail}");
-//             throw new \Exception("No lead found for email {$recipientEmail}");
-//         }
-//     } catch (\GuzzleHttp\Exception\RequestException $e) {
-//         // Handle Guzzle-specific exceptions, which include HTTP errors and network issues
-//         \Log::error("RequestException while communicating with Close.io API: " . $e->getMessage());
-//         if ($e->hasResponse()) {
-//             $responseBody = $e->getResponse()->getBody()->getContents();
-//             \Log::error("Response: " . $responseBody);
-//         }
-//         throw $e;
-//     } catch (\Exception $e) {
-//         // Log the error for debugging purposes
-//         \Log::error("General exception while communicating with Close.io API: " . $e->getMessage());
-//         throw $e;
-//     }
-// }
-
-  
-
-    
-
+ 
     private function replaceImageTagsWithSignatureTag($content)
     {
         // Define the regex pattern for the specific image src attribute
@@ -1659,34 +1456,7 @@ public function salesSendSMS($recipientEmail, $pdfFilePath)
         return $content;
     }
  
-  
-    // For whats app message method 
-/*
-    private function sendWhatsAppMessage($recipientMobile, $signatureUrl)
-    {
-        $twilioSid = env('TWILIO_SID');
-        $twilioAuthToken = env('TWILIO_AUTH_TOKEN');
-        $twilioWhatsAppNumber = env('TWILIO_WHATSAPP_NUMBER');
-
-        $twilio = new TwilioClient($twilioSid, $twilioAuthToken);
-
-        $message = "Hello, We are from Codice 1%. Here is your contract. Please sign this document: $signatureUrl";
-
-        try {
-            $twilio->messages->create(
-                "whatsapp:$recipientMobile",
-                [
-                    'from' => "whatsapp:$twilioWhatsAppNumber",
-                    'body' => $message
-                ]
-            );
-            return true;
-        } catch (\Exception $e) {
-            \Log::error('Error sending WhatsApp message: ' . $e->getMessage());
-            return false;
-        }
-    }
-    */
+ 
     
     private function sendWhatsAppMessage($recipientMobile, $signatureUrl)
     {
@@ -2135,6 +1905,8 @@ private function convertImagePaths($htmlContent)
     {
         $productName = $request->input('product_name');
 
+     
+
         $product = Product::where('product_name', $productName)->first();
  
 
@@ -2188,10 +1960,26 @@ private function convertImagePaths($htmlContent)
     public function getProducts(Request $request)
     {
         $sellerName = $request->input('seller_name');
-        
-        // Get the user's sales details based on the seller name
-        $salesDetail = SalesDetails::where('name', $sellerName)->first();
 
+        $id= $request->input('id');
+     
+        // Get the user's sales details based on the seller name
+   
+
+        $salesListDraft = SalesListDraft::where('id', $id)->first();
+
+        if (!$salesListDraft) {
+            return response()->json(['status' => 'error', 'message' => 'Sales List Draft not found']);
+        }
+
+        $companyId = $salesListDraft->company_id;
+
+        //   $salesDetail = SalesDetails::where('name', $sellerName)->first();
+        // Fetch the sales details based on seller name and company ID
+        $salesDetail = SalesDetails::where('name', $sellerName)
+            ->where('company_id', $companyId)
+            ->first();
+    
         if (!$salesDetail) {
             return response()->json(['status' => 'error', 'message' => 'Sales details not found']);
         }
