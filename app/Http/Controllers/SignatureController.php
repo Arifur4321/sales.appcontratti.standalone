@@ -35,7 +35,7 @@ use App\Models\HeaderAndFooter;
 use App\Mail\SignatureConfirmationMail;
 use Illuminate\Support\Facades\Mail;
 use App\Models\SalesDetails; 
-
+use App\Models\Template;
 
 use GuzzleHttp\Client as ActiveCampaignClient; // Alias for ActiveCampaign client
 
@@ -45,13 +45,13 @@ class SignatureController extends Controller
     private $closeClient;
 
     private $activeCampaignClient;
-
+    
     public function __construct()
     {
         $this->closeioApiKey = env('CLOSEIO_API_KEY');
         $this->closeClient = new CloseClient();
-
-           // Set up the ActiveCampaign base URL
+    
+                // Set up the ActiveCampaign base URL
          $this->activeCampaignBaseUrl = 'https://giacomofreddi.api-us1.com/api/3/';
 
            // Initialize the ActiveCampaign client without the API key (will set it later)
@@ -59,6 +59,7 @@ class SignatureController extends Controller
                'base_uri' => $this->activeCampaignBaseUrl,
         ]);
    
+        
     }
     
 
@@ -557,10 +558,13 @@ public function logView(Request $request, $id)
           // Retrieve the record by the provided ID from SalesListDraft
             $pdfSignature = SalesListDraft::findOrFail($id);
             
-            // Now, use the company_id from the SalesListDraft record
-            if ($pdfSignature && $pdfSignature->company_id == 1) {
-                // Set watermark if company_id is 1
-                $mpdf->SetWatermarkText('Giacomo Freddi');
+            $companyId = $pdfSignature->company_id ?? null;
+            $template = Template::where('company_id', $companyId)->first();
+            $watermarkText = $template->watermark ?? null;
+
+            if (!empty($watermarkText)) {
+                // Set watermark if available
+                $mpdf->SetWatermarkText($watermarkText);
                 $mpdf->showWatermarkText = true;
                 $mpdf->watermark_font = 'DejaVuSansCondensed';
                 $mpdf->watermarkTextAlpha = 0.1;
@@ -699,13 +703,10 @@ public function logView(Request $request, $id)
 
         // Update the database with the signed PDF details
         $pdfSignature->status = 'signed';
-
-
         $pdfSignature->selected_pdf_name = $filename;
         $pdfSignature->save();
-
-
-        //-----------------
+        
+         //-----------------
 
           // Call addNoteAndTagSigned method
         try {
@@ -731,8 +732,21 @@ public function logView(Request $request, $id)
             \Log::error("Error in addCloseIoNoteForSigned for SalesListDraft ID {$pdfSignature->id}: " . $e->getMessage());
         }
 
+        // for webhook  purposes
+ 
+         // Call sendToWebhook for signed WebHook URL
 
-        // Attach the signed PDF and send the confirmation email-----------------
+        try {
+            $webhookResponse = $this->sendToWebhook($id, $pdfSignature, 'signed');
+            \Log::info('Signed WebHook response: ' . $webhookResponse);
+        } catch (\Exception $e) {
+            \Log::error('Error sending data to Signed WebHook: ' . $e->getMessage());
+        }
+
+        //-----------------------
+        
+
+        // Attach the signed PDF and send the confirmation email
         Mail::to($pdfSignature->recipient_email)->send(new SignatureConfirmationMail($pdfSignature, $outputPath));
 
         $signedDocumentUrl = route('sign.document.view', ['id' => $pdfSignature->id]);
@@ -748,97 +762,66 @@ public function logView(Request $request, $id)
         return response()->json(['success' => false, 'message' => 'An error occurred while processing the document. Please try again.'], 500);
     }
 }
+
+//for webhook url for signed status  
+private function sendToWebhook($id, $salesDraftRecord, $type = 'pending')
+{
+    // Ensure variable_json is a string before decoding
+    $variableJson = is_string($salesDraftRecord->variable_json) 
+        ? json_decode($salesDraftRecord->variable_json, true) 
+        : $salesDraftRecord->variable_json;
+
+    // Ensure price_json is a string before decoding
+    $priceJson = is_string($salesDraftRecord->price_json) 
+        ? json_decode($salesDraftRecord->price_json, true) 
+        : $salesDraftRecord->price_json;
+
+    // Fetch the WebHook URL
+    $companyId = $salesDraftRecord->company_id;
+    $appConnection = AppConnection::where('company_id', $companyId)
+        ->where('type', 'WebHook')
+        ->first();
+
+    if (!$appConnection || empty($appConnection->api_key)) {
+        throw new \Exception('WebHook URL not found for this company.');
+    }
+
+    // Fetch the appropriate WebHook URL based on the type (pending or signed)
+    $webhookUrl = json_decode($appConnection->api_key, true)[$type] ?? null;
+
+    if (!$webhookUrl) {
+        throw new \Exception(ucfirst($type) . ' WebHook URL is missing.');
+    }
+
  
- 
- // to update the pdf as BLOB in database table in sever
-//  public function updateMissingPdfContent($startId, $endId)
-// {
-//     // Define the correct storage path
-//     $directoryPath = public_path('storage/pdf');
+    $totalPrice = $priceJson['dynamicminRange'] ?? null;
 
-//     // Check if the directory exists
-//     if (!file_exists($directoryPath)) {
-//         Log::error("Directory not found: $directoryPath");
-//         return response()->json(['success' => false, 'message' => "Directory not found: $directoryPath"], 500);
-//     }
+    // Remove dynamicminRange, payments, and fixedvalue from price_json
+    unset($priceJson['dynamicminRange']);
+    unset($priceJson['payments']);
+    unset($priceJson['fixedvalue']);
 
-//     // Use scandir to list files in the directory
-//     $files = array_diff(scandir($directoryPath), ['.', '..']);
+    // Prepare data for WebHook
+    $webhookData = [
+        'id' => $id,
+        'status' => $type,
+        'variable_json' => $variableJson,
+        'total_price' => $totalPrice, // Add total_price here
+        'price_json' => $priceJson, // Modified price_json without dynamicminRange, payments, and fixedvalue
+       
+    ];
 
-//     // Log the files found
-//     Log::info('Files found: ' . json_encode($files));
+    // Send data to WebHook
+    $client = new \GuzzleHttp\Client();
+    try {
+        $response = $client->post($webhookUrl, ['json' => $webhookData]);
 
-//     // If no files are found, log an error
-//     if (empty($files)) {
-//         Log::error("No files found in directory: $directoryPath");
-//         return response()->json(['success' => false, 'message' => "No files found in directory: $directoryPath"], 500);
-//     }
+        return $response->getBody()->getContents();
+    } catch (\Exception $e) {
+        throw new \Exception('Failed to send data to ' . ucfirst($type) . ' WebHook: ' . $e->getMessage());
+    }
+}
 
-//     // Initialize a counter for successful updates
-//     $updatedFilesCount = 0;
-
-//     // Loop through the files in the directory
-//     foreach ($files as $fileName) {
-//         Log::info("Processing file: $fileName");
-
-//         // Check if the file name starts with 'signed_contract_' and ends with '.pdf'
-//         if (preg_match('/^signed_contract_(\d+)\.pdf$/', $fileName, $matches)) {
-//             // Extract the contract ID from the file name
-//             $id = intval($matches[1]);
-//             Log::info("Extracted ID from file name: $id");
-
-//             // Process only files within the given range (e.g., 419 to 1000)
-//             if ($id >= $startId && $id <= $endId) {
-//                 // Check the database for the record with this ID
-//                 $salesDraft = SalesListDraft::find($id);
-
-//                 if ($salesDraft) {
-//                     // If the 'pdf_content' column is empty, update it
-//                     if (empty($salesDraft->pdf_content)) {
-//                         $filePath = $directoryPath . '/' . $fileName;
-
-//                         // Read the PDF content from the correct file location
-//                         $pdfContent = file_get_contents($filePath);
-
-//                         // Check if we were able to read the file
-//                         if ($pdfContent === false) {
-//                             Log::error("Failed to read file: $filePath");
-//                             continue;
-//                         }
-
-//                         // Save the PDF content to the 'pdf_content' column
-//                         $salesDraft->pdf_content = $pdfContent;
-//                         // Update the status to 'signed'
-//                         $salesDraft->status = 'signed';
-//                         $salesDraft->save();
-
-//                         // Log the successful update
-//                         Log::info("PDF content saved for ID: $id");
-//                         $updatedFilesCount++;
-//                     } else {
-//                         Log::info("Record for ID: $id already has PDF content.");
-//                     }
-//                 } else {
-//                     // Log if no record was found
-//                     Log::error("No record found in the database for ID: $id");
-//                 }
-//             }
-//         } else {
-//             Log::info("File $fileName does not match the 'signed_contract_' pattern.");
-//         }
-//     }
-
-//     // Check if any files were updated
-//     if ($updatedFilesCount > 0) {
-//         return response()->json(['success' => true, 'message' => "Successfully updated $updatedFilesCount PDFs between IDs $startId and $endId."]);
-//     } else {
-//         Log::warning("No PDF files were updated between IDs $startId and $endId.");
-//         return response()->json(['success' => false, 'message' => "No PDF files were updated between IDs $startId and $endId. Check the logs for details."], 500);
-//     }
-// }
-
-
-//----------------------------------------------------------------------------------------
 
 private function replaceImageTagsWithSignatureTags($content, $signatures)
 {
@@ -903,8 +886,7 @@ public function viewSignedDocument($id)
  
 
 //---------------------------------------------------
-  
-    public function checkSignatureStatus()
+   public function checkSignatureStatus()
     {
         // Fetch records where 'status' is 'signed' and 'price_id' is not 3 (i.e., not fully processed)
         $salesListDrafts = SalesListDraft::where('status', 'signed')
@@ -919,7 +901,7 @@ public function viewSignedDocument($id)
                 // Refresh the model
                 $salesListDraft->refresh();
 
-                // Double-check within the transaction 
+                // Double-check within the transaction
                 if ($salesListDraft->status == 'signed' && $salesListDraft->price_id != 3) {
                     $closeIoSuccess = false;
                     $activeCampaignSuccess = false;
@@ -984,124 +966,6 @@ public function viewSignedDocument($id)
         return response()->json(['message' => 'Status check completed']);
     }
 
-
-
-
-    // public function checkSignatureStatus()
-    // {
-    //     $config = \Dropbox\Sign\Configuration::getDefaultConfiguration();
-    //     $config->setUsername(env('HELLOSIGN_API_KEY'));
-    
-    //     $signatureRequestApi = new \Dropbox\Sign\Api\SignatureRequestApi($config);
-    
-    //     $salesListDrafts = SalesListDraft::all();
-    
-    //     $statuses = [];
-    
-    //     foreach ($salesListDrafts as $salesListDraft) {
-    //         $envelopeId = $salesListDraft->envelope_id;
-
-    //         // to check status standalone signed 
-
-    //         if ($salesListDraft->price_id != 1) {
-
-    //             DB::transaction(function () use ($salesListDraft) {
-    //                 // Lock the row for update to prevent duplicate processing
-    //                 $salesListDraft->lockForUpdate();
-    
-    //                 if ($salesListDraft->price_id != 1) { // Double-check within the transaction
-    //                     $this->addCloseIoNoteForSigned(
-    //                         $salesListDraft->id ,
-    //                         $salesListDraft->recipient_email, 
-    //                         $salesListDraft->contract_name,
-    //                         $salesListDraft->product_name
-    //                     );
-
-    //                     // to add sined in Active Campaigne 
-
-    //                     $this->addNoteAndTagSigned(
-    //                         $salesListDraft->id ,
-    //                         $salesListDraft->recipient_email, 
-    //                         $salesListDraft->contract_name,
-    //                         $salesListDraft->product_name
-    //                     );
-
-    //                     // Update the price_id to mark that the note has been sent
-    //                     $salesListDraft->price_id = 1;
-    //                     $salesListDraft->save();
-    //                 }
-    //             });
-
-    //         }
-
-    
-    //         // Check if envelopeId is not null or empty---------------------
-    //         if (empty($envelopeId)) {
-    //             $statuses[$salesListDraft->id] = 'no envelope id';
-    //             continue;
-    //         }
-    
-    //         try {
-    //             $result = $signatureRequestApi->signatureRequestGet($envelopeId);
-    //             $signatureRequest = $result->getSignatureRequest();
-    
-    //             $allStatuses = [];
-    //             foreach ($signatureRequest->getSignatures() as $signature) {
-    //                 $allStatuses[] = $signature->getStatusCode();
-    //             }
-    
-    //             // Determine the overall status
-    //             $overallStatus = 'pending';
-    //             if (in_array('declined', $allStatuses)) {
-    //                 $overallStatus = 'declined';
-    //             } elseif (in_array('signed', $allStatuses)) {
-    //                 $overallStatus = 'signed';
-    
-    //                 // Only call addCloseIoNoteForSigned if price_id is not equal to 1
-    //                 if ($salesListDraft->price_id != 1) {
-    //                     DB::transaction(function () use ($salesListDraft) {
-    //                         // Lock the row for update to prevent duplicate processing
-    //                         $salesListDraft->lockForUpdate();
-    
-    //                         if ($salesListDraft->price_id != 1) { // Double-check within the transaction
-    //                             $this->addCloseIoNoteForSigned(
-    //                                 $salesListDraft->id ,
-    //                                 $salesListDraft->recipient_email, 
-    //                                 $salesListDraft->contract_name,
-    //                                 $salesListDraft->product_name
-    //                             );
-    
-    //                             // Update the price_id to mark that the note has been sent
-    //                             $salesListDraft->price_id = 1; // You can use any non-null value to indicate that the note has been sent
-    //                             $salesListDraft->save();
-    //                         }
-    //                     });
-    //                 }
-    //             } elseif (in_array('viewed', $allStatuses)) {
-    //                 $overallStatus = 'viewed';
-    //             } elseif (in_array('sent', $allStatuses)) {
-    //                 $overallStatus = 'pending';
-    //             }
-    
-    //             // Update the status in the database
-    //             $salesListDraft->status = $overallStatus;
-    //             $salesListDraft->save();
-    
-    //             // Add to statuses array for response
-    //             $statuses[$envelopeId] = $overallStatus;
-    
-    //         } catch (\Exception $e) {
-    //             // Handle individual errors without stopping the entire process
-    //             $statuses[$envelopeId] = 'error';
-    //             \Log::error("Error checking status for envelope ID $envelopeId: " . $e->getMessage());
-    //         }
-    //     }
-    
-    //     return response()->json(['statuses' => $statuses]);
-    // }
-    
-
-
     // to add signed note in Active Campaigne
     
     public function addNoteAndTagSigned($id, $recipientEmail, $contractName, $selectedProduct)
@@ -1109,6 +973,7 @@ public function viewSignedDocument($id)
         try {
             // Retrieve company ID and AppConnection
             $companyId = SalesListDraft::where('id', $id)->value('company_id');
+            
             $appConnection = AppConnection::where('type', 'ActiveCampaign')
                                         ->where('company_id', $companyId)
                                         ->first();
@@ -1256,101 +1121,20 @@ public function viewSignedDocument($id)
 
 
     // to add signed not in close crm 
-
-    // private function addCloseIoNoteForSigned($id, $recipientEmail, $contractName, $product_name)
-    // {
-    //     try {
-
-
-    //         $companyId = SalesListDraft::where('id', $id)->value('company_id');
-    //         $appConnection = AppConnection::where('type', 'Close')
-    //                                     ->where('company_id', $companyId)
-    //                                     ->first();
-
-    //         // Step 1: Retrieve the signed note template from the AppConnection table
-    //       //  $appConnection = AppConnection::where('type', 'Close')->first();
-
-    //         $noteTemplate = '';
-    //         if ($appConnection && isset($appConnection->api_key)) {
-    //             $apiData = json_decode($appConnection->api_key, true);
-    //             if (isset($apiData['signed'])) {
-    //                 $noteTemplate = $apiData['signed'];
-    //             }
-    //         }
-
-    //         // Default note text if no template is found in the database
-    //         if (empty($noteTemplate)) {
-    //             $noteTemplate = "al cliente è arrivato il contratto: \$contract_name$, del prodotto: \$product_name$ il contratto è stato firmato con successo.";
-    //         }
-
-    //         // Replace placeholders with actual values
-    //         $noteText = str_replace(['$contract_name$', '$product_name$'], [$contractName, $product_name], $noteTemplate);
-
-    //         // Step 2: Search for the lead in Close.io using the recipient's email
-
-    //         $response = $this->closeClient->request('GET', 'https://api.close.com/api/v1/lead/', [
-    //             'auth' => [$this->closeioApiKey, ''], // Use Basic Auth with the API key as the username
-    //             'query' => [
-    //                 'query' => 'email:"' . $recipientEmail . '"', // Search specifically for the exact email address
-    //             ]
-    //         ]);
-            
-
-    //         $leads = json_decode($response->getBody(), true);
-
-    //         \Log::info('Close.io Lead Search Response:', $leads);
-
-    //         if (isset($leads['data']) && count($leads['data']) > 0) {
-    //             $leadId = $leads['data'][0]['id'];
-
-    //             // Log the variables to ensure they are not empty
-    //             \Log::info("Adding note with Contract Name: {$contractName}, Product Name: {$product_name}");
-
-    //             // Step 3: Prepare data to add the note
-    //             $data = [
-    //                 'note' => $noteText,
-    //                 'lead_id' => $leadId,
-    //             ];
-
-    //             // Step 4: Add the note to the lead
-    //             $noteResponse = $this->closeClient->request('POST', 'https://api.close.com/api/v1/activity/note/', [
-    //                 'auth' => [$this->closeioApiKey, ''], // Use Basic Auth with the API key as the username
-    //                 'json' => $data, // Pass data directly as JSON
-    //             ]);
-
-    //             $noteResponseBody = json_decode($noteResponse->getBody(), true);
-    //             \Log::info('Close.io Note Addition Response:', $noteResponseBody);
-
-    //             // Log success message
-    //             \Log::info("Successfully added note to Close.io for lead {$leadId}");
-    //         } else {
-    //             \Log::info("No lead found for email {$recipientEmail}");
-    //             throw new \Exception("No lead found for email {$recipientEmail}");
-    //         }
-    //     } catch (\GuzzleHttp\Exception\RequestException $e) {
-    //         \Log::error("RequestException while communicating with Close.io API: " . $e->getMessage());
-    //         if ($e->hasResponse()) {
-    //             $responseBody = $e->getResponse()->getBody()->getContents();
-    //             \Log::error("Response: " . $responseBody);
-    //         }
-    //         throw $e;
-    //     } catch (\Exception $e) {
-    //         \Log::error("General exception while communicating with Close.io API: " . $e->getMessage());
-    //         throw $e;
-    //     }
-    // }
-
+ 
+ 
+ 
     private function addCloseIoNoteForSigned($id, $recipientEmail, $contractName, $product_name)
     {
         try {
             // Retrieve the company_id from the SalesListDraft table
             $companyId = SalesListDraft::where('id', $id)->value('company_id');
-
+    
             // Check if AppConnection exists for the given company_id with type 'Close'
             $appConnection = AppConnection::where('type', 'Close')
                 ->where('company_id', $companyId)
                 ->first();
-
+    
             // Retrieve the signed note template and API key from the AppConnection table
             $noteTemplate = '';
             $closeApiKey = null;
@@ -1359,21 +1143,21 @@ public function viewSignedDocument($id)
                 $closeApiKey = $apiData['api_key'] ?? null;
                 $noteTemplate = $apiData['signed'] ?? null;
             }
-
+    
             // Default note text if no template is found in the database
             if (empty($noteTemplate)) {
                 $noteTemplate = "al cliente è arrivato il contratto: \$contract_name$, del prodotto: \$product_name$ il contratto è stato firmato con successo.";
             }
-
+    
             // Exit if no Close API key is found
             if (!$closeApiKey) {
                 \Log::info("No Close API key found for company_id {$companyId}");
                 return;
             }
-
+    
             // Replace placeholders with actual values
             $noteText = str_replace(['$contract_name$', '$product_name$'], [$contractName, $product_name], $noteTemplate);
-
+    
             // Step 2: Search for the lead in Close.io using the recipient's email
             $response = $this->closeClient->request('GET', 'https://api.close.com/api/v1/lead/', [
                 'auth' => [$closeApiKey, ''], // Use Basic Auth with the retrieved API key
@@ -1381,32 +1165,32 @@ public function viewSignedDocument($id)
                     'query' => 'email:"' . $recipientEmail . '"', // Search specifically for the exact email address
                 ]
             ]);
-
+    
             $leads = json_decode($response->getBody(), true);
-
+    
             \Log::info('Close.io Lead Search Response:', $leads);
-
+    
             if (isset($leads['data']) && count($leads['data']) > 0) {
                 $leadId = $leads['data'][0]['id'];
-
+    
                 // Log the variables to ensure they are not empty
                 \Log::info("Adding note with Contract Name: {$contractName}, Product Name: {$product_name}");
-
+    
                 // Step 3: Prepare data to add the note
                 $data = [
                     'note' => $noteText,
                     'lead_id' => $leadId,
                 ];
-
+    
                 // Step 4: Add the note to the lead
                 $noteResponse = $this->closeClient->request('POST', 'https://api.close.com/api/v1/activity/note/', [
                     'auth' => [$closeApiKey, ''], // Use the retrieved API key here as well
                     'json' => $data, // Pass data directly as JSON
                 ]);
-
+    
                 $noteResponseBody = json_decode($noteResponse->getBody(), true);
                 \Log::info('Close.io Note Addition Response:', $noteResponseBody);
-
+    
                 // Log success message
                 \Log::info("Successfully added note to Close.io for lead {$leadId}");
             } else {

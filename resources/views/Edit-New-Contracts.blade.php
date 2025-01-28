@@ -870,6 +870,89 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
 
+     
+// function validateTableFields() {
+//     let allValid = true;
+//     let errorMessage = '';
+
+//     var id = window.location.pathname.split('/').pop();
+//    console.log("i am your called now -----------------------");
+//     // Step 1: Make an AJAX call to get mandatory status
+//     $.ajax({
+//         url: '/get-contract-variable-status/' + id,
+//         method: 'GET',
+//         async: false,
+//         success: function(response) {
+//             if (response.error) {
+//                 console.error(response.error);
+//                 return;
+//             }
+
+//             variableMandatoryStatus = {};
+
+//             variableMandatoryStatus = response.variableStatuses; // Set the mandatory status data globally
+//             console.log('AJAX Response variableMandatoryStatus:', variableMandatoryStatus); // Log to verify
+//         },
+
+         
+
+//         error: function(xhr, status, error) {
+//             console.error('Error fetching contract variable statuses:', error);
+//         }
+//     });
+
+//     // Step 2: Validate each row based on mandatory status
+//     $('#sales-variable tbody tr').each(function() {
+//         let row = $(this);
+//       //  let variableID = parseInt(row.data('variable-id'), 10); // Convert variableID to integer
+//       let variableID = row.data('variable-id').toString();
+ 
+//       let isMandatory = !!variableMandatoryStatus[variableID]; // Check if mandatory
+
+//         row.find('.invalid-field').removeClass('invalid-field');
+
+//         row.find('input[type="text"], input[type="date"]').each(function() {
+//             if (isMandatory && $(this).val().trim() === '') {
+//                 allValid = false;
+//                 $(this).addClass('invalid-field');
+//                 errorMessage = 'Please fill out all mandatory fields.';
+//             }
+//         });
+
+//         let radioGroups = new Set();
+//         row.find('input[type="radio"]').each(function() {
+//             radioGroups.add($(this).attr('name'));
+//         });
+
+//         radioGroups.forEach(function(group) {
+//             if (isMandatory && $('input[name="' + group + '"]:checked').length === 0) {
+//                 allValid = false;
+//                 $('input[name="' + group + '"]').addClass('invalid-field');
+//                 errorMessage = 'Please select at least one option in each mandatory radio button group.';
+//             }
+//         });
+
+//         if (isMandatory && row.find('input[type="checkbox"]').length > 0 && row.find('input[type="checkbox"]:checked').length === 0) {
+//             allValid = false;
+//             row.find('input[type="checkbox"]').addClass('invalid-field');
+//             errorMessage = 'Please select at least one checkbox in each mandatory group.';
+//         }
+//     });
+
+//     if (!allValid) {
+//         Swal.fire({
+//             icon: 'error',
+//             title: 'Validation Error',
+//             text: errorMessage
+//         });
+//     }
+
+//     console.log('arifur variableMandatoryStatus[variableID] 2nd time>',   variableMandatoryStatus); // Debugging log
+//     return allValid;
+// }
+ 
+
+
  function handleVariableType(variable, labelValueCell) {
     var container, icon, inputField;
 
@@ -1739,7 +1822,60 @@ function priceTable(selectedContract, id, paymentMinRange, paymentMaxRange, Arip
 
 
 
-      
+        // function validateTableFields() {
+        //     let allValid = true;
+        //     let errorMessage = '';
+
+        //     // Loop through each row in the #sales-variable table
+        //     $('#sales-variable tbody tr').each(function() {
+        //         let row = $(this);
+
+        //         // Remove previous invalid marks
+        //         row.find('.invalid-field').removeClass('invalid-field');
+
+        //         // Check if text or date inputs are filled
+        //         row.find('input[type="text"], input[type="date"]').each(function() {
+        //             if ($(this).val().trim() === '') {
+        //                 allValid = false;
+        //                 $(this).addClass('invalid-field'); // Add invalid mark
+        //                 errorMessage = 'Please fill out Mandatory text and date fields.';
+        //             }
+        //         });
+
+        //         // Check if at least one radio button is selected in each group
+        //         let radioGroups = new Set();
+        //         row.find('input[type="radio"]').each(function() {
+        //             radioGroups.add($(this).attr('name'));
+        //         });
+
+        //         radioGroups.forEach(function(group) {
+        //             if ($('input[name="' + group + '"]:checked').length === 0) {
+        //                 allValid = false;
+        //                 // Mark all radio buttons in the group as invalid
+        //                 $('input[name="' + group + '"]').addClass('invalid-field');
+        //                 errorMessage = 'Please select at least one option in each radio button group.';
+        //             }
+        //         });
+
+        //         // Check if at least one checkbox is selected in each row
+        //         if (row.find('input[type="checkbox"]').length > 0 && row.find('input[type="checkbox"]:checked').length === 0) {
+        //             allValid = false;
+        //             // Mark all checkboxes in the row as invalid
+        //             row.find('input[type="checkbox"]').addClass('invalid-field');
+        //             errorMessage = 'Please select at least one checkbox in each group.';
+        //         }
+        //     });
+
+        //     if (!allValid) {
+        //         Swal.fire({
+        //             icon: 'error',
+        //             title: 'Validation Error',
+        //             text: errorMessage
+        //         });
+        //     }
+
+        //     return allValid;
+        // }
 
         // Fetch initial data and populate the form
         $.ajax({
@@ -1812,7 +1948,18 @@ function priceTable(selectedContract, id, paymentMinRange, paymentMaxRange, Arip
                     }
                 });
 
-               
+                // Populate the table with variables
+                // $.each(variableData, function(index, variable) {
+                //     var tableRow = $('<tr></tr>').attr('data-variable-id', variable.id).attr('data-variable-type', variable.VariableType);
+
+                //     tableRow.append('<td>' + variable.VariableName + '</td>');
+
+                //     var labelValueCell = $('<td></td>');
+
+                //     handleVariableType(variable, labelValueCell, variableMandatoryStatus);
+                //     tableRow.append(labelValueCell);
+                //     $('#sales-variable').find('tbody').append(tableRow);
+                // });
 
                 $.each(variableData, function(index, variable) {
     console.log('Processing variable:', variable); // Log the variable object

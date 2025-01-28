@@ -69,7 +69,7 @@
     </div>
 </div>
  
-<!--  pop up modal for auto fill  -->
+<!-- pop up modal for auto fill  -->
  
         <div class="row" style="display: none;">
             <div class="col-7" id="variableContainer" style="overflow-y: scroll;">
@@ -1071,7 +1071,7 @@ $.each(variableData.variableData, function(index, variable) {
                     type: 'GET',
                     data: {
                         product_name: selectedProduct,
-                         
+                       
                     },
                     success: function(response) {
                         $('#Contract').empty();
@@ -1100,13 +1100,14 @@ $.each(variableData.variableData, function(index, variable) {
                 });
             }
         });
+
         var id = window.location.pathname.split('/').pop();
         $.ajax({
             url: '/get-products',
             type: 'GET',
             data: {
                 seller_name: "{{ Auth::user()->name }}",
-                id: id ,
+                id: id,
             },
             success: function(response) {
                 if(response.status === 'success') {

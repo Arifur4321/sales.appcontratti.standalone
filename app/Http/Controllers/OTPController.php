@@ -24,19 +24,23 @@ class OTPController extends Controller
 
       public function checkSMSEnabled()
     {
-        // $user = Auth::user();
-        // $company_id = $user->company_id;
+       // $user = Auth::user();
+      //  $company_id = $user->company_id;
 
-        // $appConnection = AppConnection::where('company_id', $company_id)
-        //                               ->where('type', 'SMS')
-        //                               ->first();
-        // $smsEnabled = false;
+        // Retrieve the AppConnection for SMS type
+    //    $appConnection = AppConnection::where('company_id', $company_id)
+     //                                 ->where('type', 'SMS')
+     //                                 ->first();
 
-        // if ($appConnection && isset(json_decode($appConnection->api_key)->sms_enabled)) {
-        //     $smsEnabled = json_decode($appConnection->api_key)->sms_enabled;
-        // }
+        // Default smsEnabled to false
+    //    $smsEnabled = false;
 
-        // return response()->json(['sms_enabled' => $smsEnabled]);
+        // Check if sms_enabled is set to true in the api_key JSON
+      //  if ($appConnection && isset(json_decode($appConnection->api_key)->sms_enabled)) {
+      //      $smsEnabled = json_decode($appConnection->api_key)->sms_enabled;
+      //  }
+
+      //  return response()->json(['sms_enabled' => $smsEnabled]);
 
         return response()->json(['sms_enabled' => true]);
     }
@@ -94,7 +98,6 @@ class OTPController extends Controller
 
             // Retrieve the company name
             $company = Company::findOrFail($companyId);
-           
             $companyName = $company->company_name;
 
             // Prepare custom variables
@@ -103,26 +106,19 @@ class OTPController extends Controller
                 'friendly_name' => $companyName, // For {{friendly_name}} placeholder
             ]));
 
-            // Send OTP using Twilio with custom message template
-            // $verification = $this->twilio->verify->v2->services(config('services.twilio.verify_service_sid'))
-            //     ->verifications
-            //     ->create($mobile, "sms", [
-            //         'custom_message' => "{{code}} is your verification code for {{friendly_name}}",
-            //         'custom_variables' => $customVariables
-            //     ]);
-
-
-            // Another way 
-            $verification = $this->twilio->verify->v2->services(config('services.twilio.verify_service_sid'))
-            ->verifications
-            ->create($mobile, "sms", [
-                'customFriendlyName' => $companyName, // Use company name as friendly name
-            ]);
+               // Another way 
+             $verification = $this->twilio->verify->v2->services(config('services.twilio.verify_service_sid'))
+             ->verifications
+             ->create($mobile, "sms", [
+                 'customFriendlyName' => $companyName, // Use company name as friendly name
+             ]);
 
             // No custom-friendly name
-            // $verification = $this->twilio->verify->v2->services(config('services.twilio.verify_service_sid'))
-            // ->verifications
-            // ->create($mobile, "sms");
+          /*  
+          $verification = $this->twilio->verify->v2->services(config('services.twilio.verify_service_sid'))
+            ->verifications
+            ->create($mobile, "sms");
+            */
 
             Session::put('mobile_number', $mobile);
 

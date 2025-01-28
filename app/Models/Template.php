@@ -11,5 +11,15 @@ class Template extends Model
 {
         use HasFactory;
 
-        protected $fillable = ['email_content', 'sms_content', 'compane_email', 'company_id'];
+       
+        protected $fillable = [
+                'email_content',
+                'sms_content',
+                'compane_email',
+                'company_id',
+                'email_subject', // New field
+                'watermark',     // New field
+       ];
+
+
 }

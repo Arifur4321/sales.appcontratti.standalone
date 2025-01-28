@@ -175,8 +175,8 @@
     <script>
     $(document).ready(function() {
 
-
-/*
+ 
+ /*
         window.onload = function() {
             checkSignatureStatus();
         };
@@ -192,7 +192,7 @@
                 },
                 success: function(response) {
                     console.log('Signature status check completed');
-                    // Since we're not receiving specific statuses, we don't need to process the response further
+                   
                 },
                 error: function(xhr, status, error) {
                     console.error('Error checking signature status:', error);
@@ -200,12 +200,12 @@
             });
         }
 
-       
+      
         setInterval(function() {
             checkSignatureStatus();
-        }, 300000); 
+        }, 300000);  
 */
-
+  // Set the interval to call the function every 5 minutes (300,000 milliseconds)
         
         let table = new DataTable('#ContractList', {
             pagingType: 'full_numbers',

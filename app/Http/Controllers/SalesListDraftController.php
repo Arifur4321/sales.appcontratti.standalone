@@ -61,6 +61,10 @@ class SalesListDraftController extends Controller
     }
     
 
+     
+
+
+
     public function showSendNewContractsPage($id)
     {
         // Retrieve the SalesListDraft entry based on the provided ID
@@ -142,7 +146,33 @@ class SalesListDraftController extends Controller
         return view('Edit-New-Contracts', ['id' => $id, 'productName' => $productName , 'ContractName' => $ContractName]);
     }
 
+    
  
+
+    // public function showAll()
+    // {
+    //     $sellerName = Auth::user()->name;
+
+    //     $salesDetail = SalesDetails::where('name', $sellerName)->first();
+    //     if (!$salesDetail) {
+    //         return response()->json(['status' => 'error', 'message' => 'Sales details not found']);
+    //     }
+
+    //     $salesId = $salesDetail->id;
+    //     $salesName = $salesDetail->name;
+
+    //     if (  $salesId) {
+    //         // Query SalesListDraft table based on $salesId
+    //         $salesListDraft = SalesListDraft::where('sales_id', $salesId)->get();
+
+    //         return view('Your-Lists', compact('salesListDraft'));
+    //     }
+
+    //     return response()->json(['status' => 'error', 'message' => 'Unauthorized access']);
+        
+    // }
+
+
     public function showAll()
     {
         // Retrieve the authenticated user's email
@@ -153,12 +183,13 @@ class SalesListDraftController extends Controller
         if (!$salesDetail) {
             return response()->json(['status' => 'error', 'message' => 'Sales details not found']);
         }
-
-            // Check if the status is 'active'
+        
+        // Check if the status is 'active'
         if ($salesDetail->status !== 'active') {
                 // If the status is not active, show the disactive view
                 return view('disactive');
-            }
+        }
+
 
         $salesId = $salesDetail->id;
 
@@ -171,6 +202,38 @@ class SalesListDraftController extends Controller
 
         return response()->json(['status' => 'error', 'message' => 'Unauthorized access']);
     }
+
+
+
+     
+    // public function createNewEntry(Request $request)
+    // {
+    //     // Get the name of the authenticated user
+    //     $sellerName = Auth::user()->name;
+
+    //     // Retrieve sales details based on the seller's name
+    //     $salesDetail = SalesDetails::where('name', $sellerName)->first();
+
+    //     // Check if sales details are found
+    //     if (!$salesDetail) {
+    //         return response()->json(['status' => 'error', 'message' => 'Sales details not found']);
+    //     }
+
+    //     // Retrieve the sales ID
+    //     $salesId = $salesDetail->id;  
+
+    //     $salesCompanyID = $salesDetail->company_id  ;
+
+    //     // Create a new entry in the SalesListDraft table with sales_id filled
+    //     $newEntry = SalesListDraft::create([
+    //         'sales_id' => $salesId,
+    //         'company_id' => $salesCompanyID ,
+    //     ]);
+
+    //     // Return a success response
+    //     return response()->json(['message' => 'New entry created successfully.', 'entry' => $newEntry]);
+    // }
+
 
     public function createNewEntry(Request $request)
     {

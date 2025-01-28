@@ -1,5 +1,6 @@
 <?php
 
+
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
@@ -9,8 +10,6 @@ use App\Models\SalesListDraft;
 use App\Models\Template;
 use App\Models\Company;
 
-
-
 class SendSignatureLink extends Mailable
 {
     use Queueable, SerializesModels;
@@ -19,10 +18,11 @@ class SendSignatureLink extends Mailable
     public $recipientName;
     public $pdfSignature;
     public $companyName;
+    public $emailSubject;
 
     /**
      * Create a new message instance.
-     *replace should work now
+     *
      * @param string $signingUrl
      * @param string $recipientName
      * @param object $pdfSignature
@@ -33,17 +33,24 @@ class SendSignatureLink extends Mailable
         $this->recipientName = $recipientName;
         $this->pdfSignature = $pdfSignature;
 
+        // Fetch the SalesListDraft record to get the company ID
         $salesDraft = SalesListDraft::find($pdfSignature->id);
 
         if ($salesDraft) {
+            // Fetch the company name
             if ($salesDraft->company_id == 1) {
                 $this->companyName = 'GF SRL';
             } else {
                 $company = Company::find($salesDraft->company_id);
                 $this->companyName = $company ? $company->company_name : 'GF SRL';
             }
+
+            // Fetch the email subject dynamically from the templates table
+            $template = Template::where('company_id', $salesDraft->company_id)->first();
+            $this->emailSubject = $template ? $template->email_subject : 'Si prega di firmare il documento contrattuale del Codice 1%';
         } else {
             $this->companyName = 'GF SRL';
+            $this->emailSubject = 'Si prega di firmare il documento contrattuale del Codice 1%'; // Default subject
         }
     }
 
@@ -60,47 +67,51 @@ class SendSignatureLink extends Mailable
         if ($template && $template->email_content) {
             // Use the email template from the database
             $emailContent = $this->replacePlaceholders($template->email_content);
+
             return $this->view('emails.dynamic_template')
-                        ->subject('Si prega di firmare il documento contrattuale del Codice 1%')
-                        ->replyTo('no-reply@giacomofreddi.it')  // Set the no-reply email address
-                        ->with([
-                            'emailContent' => $emailContent,
-                            'recipientName' => $this->recipientName,
-                            'companyName' => $this->companyName,
-                        ]);
+                ->subject($this->emailSubject) // Use the dynamically fetched subject
+                ->replyTo('no-reply@giacomofreddi.it') // Set the no-reply email address
+                ->with([
+                    'emailContent' => $emailContent,
+                    'recipientName' => $this->recipientName,
+                    'companyName' => $this->companyName,
+                ]);
         } else {
             // Use the default template (signature_link.blade.php)
             return $this->view('emails.signature_link')
-                        ->subject('Si prega di firmare il documento contrattuale del Codice 1%')
-                        ->replyTo('no-reply@giacomofreddi.it')  // Set the no-reply email address
-                        ->with([
-                            'signingUrl' => $this->signingUrl,
-                            'recipientName' => $this->recipientName,
-                            'pdfSignature' => $this->pdfSignature,
-                            'companyName' => $this->companyName,
-                        ]);
+                ->subject($this->emailSubject) // Use the dynamically fetched subject
+                ->replyTo('no-reply@giacomofreddi.it') // Set the no-reply email address
+                ->with([
+                    'signingUrl' => $this->signingUrl,
+                    'recipientName' => $this->recipientName,
+                    'pdfSignature' => $this->pdfSignature,
+                    'companyName' => $this->companyName,
+                ]);
         }
     }
 
-  
+    /**
+     * Replace placeholders in the email template.
+     *
+     * @param string $emailContent
+     * @return string
+     */
     private function replacePlaceholders($emailContent)
     {
         // Define the route link for signing
         $signingUrl = route('signature.view', ['id' => $this->pdfSignature->id]);
-    
+
         // Use regex to find all instances of %word% in the template
         $emailContent = preg_replace_callback('/%(.*?)%/', function ($matches) use ($signingUrl) {
             // $matches[1] contains the text inside the %%, use it as the link text
-            $linkText = $matches[1];  // This will capture "Firmare il documento" or "Click here"
+            $linkText = $matches[1]; // This will capture "Firmare il documento" or "Click here"
             return '<a href="' . $signingUrl . '">' . e($linkText) . '</a>';
         }, $emailContent);
-    
+
         return $emailContent;
     }
-    
 }
 
-// so how to make this as periodic sending email like in every 3 hour but keep all previos logic
 
 // namespace App\Mail;
 
@@ -108,6 +119,7 @@ class SendSignatureLink extends Mailable
 // use Illuminate\Mail\Mailable;
 // use Illuminate\Queue\SerializesModels;
 // use App\Models\SalesListDraft;
+// use App\Models\Template;
 // use App\Models\Company;
 
 // class SendSignatureLink extends Mailable
@@ -121,7 +133,7 @@ class SendSignatureLink extends Mailable
 
 //     /**
 //      * Create a new message instance.
-//      *
+//      *replace should work now
 //      * @param string $signingUrl
 //      * @param string $recipientName
 //      * @param object $pdfSignature
@@ -146,17 +158,55 @@ class SendSignatureLink extends Mailable
 //         }
 //     }
 
-   
+//     /**
+//      * Build the message.
+//      * 
+//      * @return $this
+//      */
 //     public function build()
 //     {
-//         return $this->view('emails.signature_link')
-//                     ->subject('Si prega di firmare il documento contrattuale del Codice 1%')
-//                     ->replyTo('no-reply@giacomofreddi.it')  // Set the no-reply email address
-//                     ->with([
-//                         'signingUrl' => $this->signingUrl,
-//                         'recipientName' => $this->recipientName,
-//                         'pdfSignature' => $this->pdfSignature,
-//                         'companyName' => $this->companyName,
-//                     ]);
+//         // Check if an email template exists in the database
+//         $template = Template::where('company_id', $this->pdfSignature->company_id)->first();
+
+//         if ($template && $template->email_content) {
+//             // Use the email template from the database
+//             $emailContent = $this->replacePlaceholders($template->email_content);
+//             return $this->view('emails.dynamic_template')
+//                         ->subject('Si prega di firmare il documento contrattuale del Codice 1%')
+//                         ->replyTo('no-reply@giacomofreddi.it')  // Set the no-reply email address
+//                         ->with([
+//                             'emailContent' => $emailContent,
+//                             'recipientName' => $this->recipientName,
+//                             'companyName' => $this->companyName,
+//                         ]);
+//         } else {
+//             // Use the default template (signature_link.blade.php)
+//             return $this->view('emails.signature_link')
+//                         ->subject('Si prega di firmare il documento contrattuale del Codice 1%')
+//                         ->replyTo('no-reply@giacomofreddi.it')  // Set the no-reply email address
+//                         ->with([
+//                             'signingUrl' => $this->signingUrl,
+//                             'recipientName' => $this->recipientName,
+//                             'pdfSignature' => $this->pdfSignature,
+//                             'companyName' => $this->companyName,
+//                         ]);
+//         }
 //     }
-// }  
+
+  
+//     private function replacePlaceholders($emailContent)
+//     {
+//         // Define the route link for signing
+//         $signingUrl = route('signature.view', ['id' => $this->pdfSignature->id]);
+    
+//         // Use regex to find all instances of %word% in the template
+//         $emailContent = preg_replace_callback('/%(.*?)%/', function ($matches) use ($signingUrl) {
+//             // $matches[1] contains the text inside the %%, use it as the link text
+//             $linkText = $matches[1];  // This will capture "Firmare il documento" or "Click here"
+//             return '<a href="' . $signingUrl . '">' . e($linkText) . '</a>';
+//         }, $emailContent);
+    
+//         return $emailContent;
+//     }
+    
+// }
